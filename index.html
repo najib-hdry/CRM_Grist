@@ -1,0 +1,553 @@
+<!--
+  Grist CRM Widget — Prospects & Clients
+  Widget personnalisé pour Grist
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>CRM</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="vendor/d3/d3.v7.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --color-bg: #FBFFFB;
+      --color-bg-soft: #EEFFEE;
+      --color-primary: #271A79;
+      --color-accent-green: #B9FFB7;
+      --color-accent-cyan: #42B6C8;
+      --color-accent-yellow: #FAF56D;
+      --color-accent-mint: #A9EFC5;
+      --color-text-muted: #5C5A8A;
+      --color-border: #DDEFE0;
+      --border-thick: 2px solid var(--color-primary);
+      --radius-md: 12px;
+    }
+
+    body {
+      font-family: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--color-bg);
+      color: var(--color-primary);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .hidden { display: none !important; }
+
+    /* ===== HEADER ===== */
+    .app-header { padding: 20px 24px 0; }
+    .app-header h1 { font-size: 30px; font-weight: 800; color: var(--color-primary); }
+    .app-header p { font-size: 15px; color: var(--color-text-muted); margin-top: 2px; }
+    .header-row {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px; margin-top: 16px;
+    }
+    .header-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    /* ===== RELANCE BANNER ===== */
+    .relance-banner {
+      margin: 14px 24px 18px; background: #FFF7D6; border: 2px solid var(--color-accent-yellow);
+      border-radius: var(--radius-md); padding: 12px 18px; display: flex; align-items: center;
+      gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--color-primary); cursor: pointer;
+      transition: background 0.15s;
+    }
+    .relance-banner:hover { background: #FFF2B8; }
+    .relance-banner.late { background: #FFE3DC; border-color: #F2A98A; }
+    .relance-banner.late:hover { background: #FFD6C9; }
+    .relance-banner-icon { font-size: 18px; }
+    .relance-banner-text { flex: 1; font-weight: 600; }
+    .relance-banner-link { font-weight: 700; text-decoration: underline; }
+
+    /* ===== TABS ===== */
+    .tabs-bar {
+      display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+      background: var(--color-bg-soft); border-radius: var(--radius-md); padding: 5px;
+      border: 2px solid var(--color-border);
+    }
+    .tab-btn {
+      padding: 9px 18px; border: none; background: none; cursor: pointer;
+      font-family: inherit; font-size: 14px; font-weight: 700; color: var(--color-text-muted); border-radius: 9px;
+      transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+      position: relative;
+    }
+    .tab-btn:hover { color: var(--color-primary); background: var(--color-accent-mint); }
+    .tab-btn.active { color: var(--color-primary); background: white; border: 2px solid var(--color-primary); }
+    .tab-badge {
+      background: #E2543C; color: white; font-size: 11px; font-weight: 700;
+      padding: 1px 7px; border-radius: 10px; line-height: 1.4;
+    }
+    .tab-content { display: none; padding: 0 24px 24px; }
+    .tab-content.active { display: block; }
+
+    /* ===== BUTTONS ===== */
+    .btn {
+      padding: 10px 18px; border: 2px solid transparent; border-radius: var(--radius-md); font-size: 14px; font-family: inherit;
+      font-weight: 700; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-primary { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+    .btn-primary:hover { background: #1c1259; }
+    .btn-secondary { background: white; color: var(--color-primary); border-color: var(--color-primary); }
+    .btn-secondary:hover { background: var(--color-accent-mint); }
+    .btn-accent { background: var(--color-accent-cyan); color: white; border-color: var(--color-accent-cyan); }
+    .btn-accent:hover { background: #36a3b4; }
+    .btn-danger { background: #FBE2DC; color: #B23A22; border-color: #F2A98A; }
+    .btn-danger:hover { background: #F6C9BC; }
+    .btn-icon {
+      background: none; border: none; cursor: pointer; font-size: 16px;
+      padding: 5px 7px; border-radius: 7px; transition: background 0.15s;
+    }
+    .btn-icon:hover { background: var(--color-bg-soft); }
+    .btn-icon-small { background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px 4px; color: var(--color-text-muted); }
+    .new-btn-group { display: flex; gap: 8px; }
+    .file-input-label {
+      display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px;
+      border: 2px dashed var(--color-border); border-radius: var(--radius-md); font-size: 13px; cursor: pointer;
+      color: var(--color-text-muted); background: var(--color-bg-soft);
+    }
+    .file-input-label:hover { border-color: var(--color-accent-cyan); }
+
+    /* ===== TYPE / PRIORITY BADGES ===== */
+    .type-badge {
+      display: inline-block; padding: 3px 9px; border-radius: 12px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em;
+    }
+    .type-client { background: var(--color-accent-cyan); color: white; }
+    .type-prospect { background: var(--color-accent-green); color: var(--color-primary); }
+    .type-ancien { background: var(--color-bg-soft); color: var(--color-text-muted); }
+
+    .priority-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
+    .dot-high { background: #E2543C; }
+    .dot-medium { background: #E8B339; }
+    .dot-low { background: #4FAE6B; }
+
+    .status-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;
+    }
+
+    /* ===== KANBAN ===== */
+    .kanban-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .kanban-toolbar input[type="text"], .kanban-toolbar input[type="search"] {
+      padding: 9px 14px; border: 2px solid var(--color-border); border-radius: var(--radius-md); font-size: 14px;
+      flex: 0 1 280px; width: 280px; font-family: inherit; background: white;
+    }
+    .kanban-toolbar select {
+      padding: 9px 10px; border: 2px solid var(--color-border); border-radius: var(--radius-md); font-size: 14px; font-family: inherit; background: white;
+    }
+    .kanban-show-all-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-text-muted); cursor: pointer; white-space: nowrap; }
+
+    .carte-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .carte-toolbar select {
+      padding: 9px 10px; border: 2px solid var(--color-border); border-radius: var(--radius-md); font-size: 14px; font-family: inherit; background: white;
+    }
+    .carte-count { font-size: 13px; color: var(--color-text-muted); }
+    .carte-board { height: 560px; border-radius: 14px; border: 2px solid var(--color-primary); overflow: hidden; }
+    .carte-popup-name { font-weight: 800; color: var(--color-primary); margin-bottom: 4px; }
+    .carte-popup-link { color: var(--color-accent-cyan); font-weight: 700; text-decoration: none; font-size: 13px; }
+    .carte-legend {
+      display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 14px;
+      background: var(--color-bg-soft); border-radius: 10px; font-size: 12px; flex-wrap: wrap;
+    }
+    .carte-legend-title { font-weight: 800; color: var(--color-primary); margin-right: 4px; }
+    .carte-legend-item { display: flex; align-items: center; gap: 5px; }
+    .carte-legend-swatch { width: 16px; height: 16px; border-radius: 3px; border: 1px solid rgba(39,26,121,0.3); }
+
+    .carte-region-wrap { position: relative; background: white; }
+    .carte-region-wrap svg { width: 100%; height: 100%; }
+    .carte-region-status { position: absolute; top: 10px; left: 14px; font-size: 12px; color: var(--color-text-muted); }
+    .region-shape { stroke: #fff; stroke-width: 1.2px; cursor: pointer; transition: opacity 0.15s; }
+    .region-shape:hover { opacity: 0.8; }
+    .region-label { font-size: 11px; font-weight: 700; text-anchor: middle; pointer-events: none; }
+    .region-amount { font-size: 10px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+    .carte-region-tooltip {
+      position: absolute; pointer-events: none; background: var(--color-primary); color: white;
+      padding: 6px 10px; border-radius: 7px; font-size: 12px; line-height: 1.4; display: none; z-index: 10; white-space: nowrap;
+    }
+    .carte-domtom-chips { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .carte-domtom-chip {
+      flex: 1 0 130px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--color-primary);
+      font-size: 12px;
+    }
+    .carte-domtom-chip-name { font-weight: 800; margin-bottom: 3px; }
+    .carte-domtom-chip-value { font-weight: 600; }
+    #kanban-board {
+      display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px;
+    }
+    .kanban-column { flex: 1 0 240px; min-width: 240px; max-width: 320px; }
+    .kanban-col-header {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--color-bg-soft);
+      padding: 13px 15px;
+      min-height: 54px;
+      border-radius: 10px 10px 0 0;
+      font-weight: 900; font-size: 15px;
+      color: var(--color-primary);
+      border: 2px solid var(--color-primary);
+      border-bottom: 3px solid var(--kanban-col-color, var(--color-primary));
+    }
+    .kanban-col-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; line-height: 1.1; }
+    .kanban-count {
+      background: white;
+      color: var(--color-primary);
+      font-size: 12px; font-weight: 900;
+      padding: 2px 9px;
+      border-radius: 999px;
+      border: 2px solid var(--color-primary);
+      white-space: nowrap;
+    }
+    .kanban-cards {
+      background: linear-gradient(180deg, rgba(238,255,238,.6), rgba(251,255,251,.9));
+      border-radius: 0 0 10px 10px; padding: 9px; min-height: 80px;
+      display: flex; flex-direction: column; gap: 9px; transition: background 0.15s;
+      border: 2px solid var(--color-primary); border-top: none;
+    }
+    .kanban-cards.drag-over { background: var(--color-accent-mint); outline: 3px dashed var(--color-accent-cyan); outline-offset: -8px; }
+    .kanban-empty { text-align: center; color: var(--color-text-muted); font-size: 13px; padding: 16px 0; }
+
+    .compte-card {
+      background: white; border-radius: 10px; padding: 11px 13px; cursor: pointer;
+      border: 2px solid var(--color-border); transition: border-color 0.15s, transform 0.1s;
+    }
+    .compte-card:hover { border-color: var(--color-accent-cyan); transform: translateY(-1px); }
+    .compte-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .compte-card-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+    .compte-card-contact, .compte-card-next { font-size: 13px; color: var(--color-text-muted); margin-top: 2px; }
+    .compte-card-amount { font-size: 14px; font-weight: 700; color: #1F7A4D; margin-top: 4px; }
+    .compte-card-relance { font-size: 12px; margin-top: 6px; padding: 3px 7px; border-radius: 7px; background: var(--color-bg-soft); color: var(--color-text-muted); display: inline-block; }
+    .compte-card-relance.relance-late { background: #FBE2DC; color: #B23A22; font-weight: 700; }
+    .compte-card-relance.relance-soon { background: #FFF3C2; color: #8A6D12; }
+    .compte-card.relance-late { border-color: #E2543C; }
+    .compte-card.relance-soon { border-color: #E8B339; }
+
+    /* ===== TABLE ===== */
+    .table-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .table-toolbar input, .table-toolbar select {
+      padding: 9px 14px; border: 2px solid var(--color-border); border-radius: var(--radius-md); font-size: 14px; font-family: inherit;
+      flex: 0 1 280px; width: 280px; background: white;
+    }
+    .data-table { width: 100%; border-collapse: collapse; background: white; border-radius: var(--radius-md); overflow: hidden; border: 2px solid var(--color-border); }
+    .data-table th { text-align: left; padding: 11px 13px; background: var(--color-bg-soft); font-size: 12px; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.02em; border-bottom: 2px solid var(--color-border); }
+    .data-table td { padding: 11px 13px; border-bottom: 1px solid var(--color-bg-soft); font-size: 14px; }
+    .clickable-row { cursor: pointer; transition: background 0.1s; }
+    .clickable-row:hover { background: var(--color-bg-soft); }
+
+    /* ===== RELANCES ===== */
+    .relance-group { margin-bottom: 20px; }
+    .relance-group-title { font-size: 16px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .relance-group-count { background: var(--color-bg-soft); color: var(--color-text-muted); font-size: 12px; padding: 1px 9px; border-radius: 10px; }
+    .relance-list { display: flex; flex-direction: column; gap: 8px; }
+    .relance-item {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      background: white; padding: 11px 15px; border-radius: var(--radius-md); cursor: pointer;
+      border: 2px solid var(--color-border); transition: border-color 0.15s;
+    }
+    .relance-item:hover { border-color: var(--color-accent-cyan); }
+    .relance-item-late { border-color: #E2543C; }
+    .relance-item-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .relance-item-action { font-size: 12px; color: var(--color-text-muted); }
+    .relance-item-date { font-size: 14px; font-weight: 600; white-space: nowrap; }
+    .relance-days { color: var(--color-text-muted); font-weight: 400; }
+
+    .relance-summary-card {
+      background: #FFF9E6; border: 2px solid #E8B339; border-radius: 12px;
+      padding: 14px 16px; margin-bottom: 18px;
+    }
+    .relance-summary-card.relance-summary-late { background: #FFEFEE; border-color: #E2543C; }
+    .relance-summary-card.relance-summary-stopped { background: var(--color-bg-soft); border-color: var(--color-border); }
+    .relance-summary-header { font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.03em; color: var(--color-primary); margin-bottom: 8px; }
+    .relance-summary-body { margin-bottom: 12px; }
+    .relance-summary-action { font-size: 15px; font-weight: 700; color: var(--color-primary); }
+    .relance-summary-date { font-size: 13px; color: var(--color-text-muted); margin-top: 3px; }
+    .relance-summary-actions { display: flex; gap: 8px; }
+
+    /* ===== STATS ===== */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 24px; }
+    .stat-card {
+      background: #FBFFFA;
+      border-radius: 12px;
+      padding: 12px 16px;
+      border: 3px solid var(--color-primary);
+      box-shadow: 5px 5px 0 #86cfd7;
+      border-left: 3px solid var(--color-primary) !important;
+    }
+    .stat-value { font-size: 28px; font-weight: 900; color: var(--color-accent-cyan); line-height: 1; }
+    .stat-label { font-size: 11px; color: var(--color-primary); font-weight: 800; text-transform: uppercase; margin-top: 4px; letter-spacing: 0.03em; }
+    .stats-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .chart-card { background: white; border-radius: var(--radius-md); padding: 17px; border: 2px solid var(--color-border); }
+    .chart-card h4 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .bar-chart { display: flex; flex-direction: column; gap: 10px; }
+    .bar-row { display: flex; align-items: center; gap: 10px; }
+    .bar-label { font-size: 12px; color: var(--color-text-muted); width: 110px; flex-shrink: 0; }
+    .bar-track { flex: 1; height: 11px; background: var(--color-bg-soft); border-radius: 6px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 6px; transition: width 0.3s; }
+    .bar-value { font-size: 12px; font-weight: 700; width: 26px; text-align: right; }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-state { text-align: center; color: var(--color-text-muted); font-size: 14px; padding: 24px; }
+
+    /* ===== MODAL ===== */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(39,26,121,0.45); display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 20px;
+    }
+    .modal { background: white; border-radius: 16px; max-width: 640px; width: 100%; max-height: 88vh; display: flex; flex-direction: column; border: 2px solid var(--color-primary); box-shadow: 0 20px 50px rgba(39,26,121,0.3); transition: max-width 0.2s, max-height 0.2s; }
+    .modal-small { max-width: 420px; }
+    .modal-large { max-width: 720px; }
+    .modal-expanded { max-width: 95vw; width: 95vw; max-height: 94vh; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 2px solid var(--color-bg-soft); }
+    .modal-header h2 { font-size: 19px; font-weight: 700; }
+    .modal-header-actions { display: flex; align-items: center; gap: 6px; }
+    .modal-expand-btn { background: none; border: 2px solid var(--color-border); border-radius: 7px; font-size: 14px; cursor: pointer; color: var(--color-text-muted); padding: 4px 8px; }
+    .modal-expand-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    .modal-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--color-text-muted); }
+    .modal-tabs { display: flex; gap: 4px; padding: 10px 22px 0; border-bottom: 2px solid var(--color-bg-soft); flex-wrap: wrap; }
+    .modal-tab-btn { padding: 9px 13px; border: none; background: none; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--color-text-muted); cursor: pointer; border-radius: 7px 7px 0 0; }
+    .modal-tab-btn.active { color: var(--color-primary); background: var(--color-bg-soft); }
+    .modal-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
+    .modal-footer { display: flex; gap: 8px; padding: 16px 22px; border-top: 2px solid var(--color-bg-soft); align-items: center; }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-field { display: flex; flex-direction: column; gap: 4px; }
+    .form-field-full { margin-top: 12px; }
+    .form-field label { font-size: 12px; font-weight: 700; color: var(--color-text-muted); }
+    .form-field input, .form-field select, .form-field textarea {
+      padding: 9px 11px; border: 2px solid var(--color-border); border-radius: 9px; font-size: 14px; font-family: inherit;
+    }
+    .form-field textarea { resize: vertical; }
+    .form-section-title {
+      font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.03em;
+      color: var(--color-primary); margin: 18px 0 4px;
+    }
+    .form-section-title:first-child { margin-top: 0; }
+
+    .fiche-header {
+      display: flex; align-items: center; gap: 16px; margin-bottom: 20px;
+      padding: 16px 18px; background: var(--color-bg-soft); border-radius: 14px;
+      border: 2px solid var(--color-primary);
+    }
+    .fiche-avatar {
+      width: 56px; height: 56px; min-width: 56px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; font-weight: 900; color: var(--color-primary);
+      border: 2px solid var(--color-primary); box-shadow: 3px 3px 0 #271A79;
+    }
+    .fiche-header-main { flex: 1; min-width: 0; }
+    .fiche-header-name { font-size: 20px; font-weight: 900; color: var(--color-primary); margin-bottom: 6px; }
+    .fiche-header-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--color-text-muted); }
+    .fiche-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+    .fiche-cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .fiche-card {
+      background: #FBFFFA; border-radius: 12px; padding: 14px 16px;
+      border: 2px solid var(--color-primary); box-shadow: 4px 4px 0 #B9FFB7;
+    }
+    .fiche-card-full { margin-top: 14px; }
+    .fiche-card-title {
+      font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.03em;
+      color: var(--color-primary); margin-bottom: 10px; padding-bottom: 8px;
+      border-bottom: 2px solid var(--color-bg-soft);
+    }
+    .fiche-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; }
+    .fiche-row-label { font-size: 12px; font-weight: 700; color: var(--color-text-muted); white-space: nowrap; }
+    .fiche-row-value { font-size: 13px; font-weight: 600; color: var(--color-primary); text-align: right; overflow: hidden; text-overflow: ellipsis; }
+    .fiche-row-empty { color: var(--color-text-muted); font-weight: 400; }
+    .fiche-link { color: var(--color-accent-cyan); text-decoration: none; font-weight: 700; }
+    .fiche-link:hover { text-decoration: underline; }
+    .fiche-description { font-size: 14px; line-height: 1.5; white-space: pre-wrap; margin-top: 4px; }
+
+    .form-field-address { position: relative; }
+    .address-suggestions {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+      background: white; border: 2px solid var(--color-primary); border-top: none;
+      border-radius: 0 0 9px 9px; max-height: 200px; overflow-y: auto;
+      box-shadow: 0 6px 14px rgba(39,26,121,0.15);
+    }
+    .address-suggestion-item { padding: 8px 11px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--color-bg-soft); }
+    .address-suggestion-item:last-child { border-bottom: none; }
+    .address-suggestion-item:hover { background: var(--color-bg-soft); }
+
+    .add-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+    .add-form input, .add-form select, .add-form textarea {
+      padding: 9px 11px; border: 2px solid var(--color-border); border-radius: 9px; font-size: 14px; font-family: inherit;
+    }
+    .add-form input[type="text"], .add-form input[type="email"], .add-form input[type="tel"] { flex: 1; min-width: 100px; }
+
+    .sub-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+    .sub-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; background: var(--color-bg-soft); border-radius: 10px; padding: 11px 13px; border: 1.5px solid var(--color-border); }
+    .sub-item-main { flex: 1; }
+    .sub-item-detail { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
+    .sub-item-file { font-size: 12px; color: var(--color-primary); margin-top: 6px; cursor: pointer; text-decoration: underline; }
+    .sub-item-actions { display: flex; gap: 4px; }
+    .task-done .sub-item-main { opacity: 0.5; text-decoration: line-through; }
+    .task-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+    .badge-primary { background: #FFF3C2; color: #8A6D12; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 8px; }
+    .consent-check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-muted); margin-top: 6px; cursor: pointer; }
+    .consent-date { color: var(--color-text-muted); }
+    .rgpd-notice { background: #EAF6F8; color: #1B5C66; font-size: 12px; padding: 11px 13px; border-radius: var(--radius-md); margin-bottom: 14px; border: 1.5px solid #BEE3E8; }
+    .contact-rgpd-actions { margin-top: 6px; }
+    .link-btn { background: none; border: none; padding: 0; font-family: inherit; font-size: 12px; color: var(--color-accent-cyan); text-decoration: underline; cursor: pointer; }
+    .link-btn:hover { color: var(--color-primary); }
+
+    .comment-list { display: flex; flex-direction: column; gap: 10px; }
+    .comment-item { background: var(--color-bg-soft); border-radius: 10px; padding: 11px 13px; position: relative; border: 1.5px solid var(--color-border); }
+    .comment-meta { font-size: 12px; color: var(--color-text-muted); margin-bottom: 4px; }
+    .comment-content { font-size: 14px; white-space: pre-wrap; }
+    .comment-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; }
+    .comment-actions .btn-icon-small { position: static; }
+    .comment-actions .btn-icon-small:first-child { display: inline-block; transform: scaleX(-1); }
+
+    /* ===== SETTINGS ===== */
+    .settings-section { background: white; border-radius: var(--radius-md); padding: 17px; margin-bottom: 14px; border: 2px solid #271A79; }
+    .settings-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .settings-row-2col .settings-section { margin-bottom: 0; }
+    .settings-section h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+    .settings-hint { font-size: 12px; color: var(--color-text-muted); margin-bottom: 12px; }
+    .kanban-status-edit-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; padding: 4px; border-radius: 8px; transition: background 0.15s, opacity 0.15s; }
+    .kanban-status-edit-row input[type="text"] { flex: 1; padding: 7px 11px; border: 1.5px solid var(--color-border); border-radius: 7px; font-size: 13px; }
+    .kanban-status-edit-row input[type="color"] { width: 34px; height: 34px; border: none; padding: 0; border-radius: 7px; cursor: pointer; }
+    .kanban-status-edit-row .drag-handle { cursor: grab; color: var(--color-text-muted); font-size: 17px; padding: 0 4px; user-select: none; }
+    .kanban-status-edit-row.dragging { opacity: 0.4; }
+    .kanban-status-edit-row.drag-over-row { background: var(--color-bg-soft); box-shadow: inset 0 2px 0 var(--color-accent-cyan); }
+    .stage-flag-check { display: flex; align-items: center; gap: 3px; font-size: 15px; cursor: pointer; white-space: nowrap; }
+
+    /* ===== TOAST ===== */
+    #toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 2000; }
+    .toast { padding: 11px 17px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600; color: white; box-shadow: 0 4px 12px rgba(39,26,121,0.2); animation: toastIn 0.2s ease; }
+    .toast-success { background: #1F7A4D; }
+    .toast-error { background: #B23A22; }
+    .toast-info { background: var(--color-primary); }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    #not-in-grist { padding: 60px 24px; text-align: center; color: var(--color-text-muted); }
+  </style>
+</head>
+<body>
+  <div id="not-in-grist" class="hidden">
+    <p>Ce widget doit être utilisé dans Grist.</p>
+  </div>
+
+  <div id="main-content">
+    <div class="app-header">
+      <h1>CRM</h1>
+      <p>Suivez vos prospects, clients et contrats.</p>
+      <div class="header-row">
+        <div class="header-actions">
+          <button class="btn btn-secondary" onclick="triggerCsvImport()">⬆️ Importer CSV</button>
+          <button class="btn btn-secondary" onclick="triggerExcelImport()">⬆️ Importer Excel</button>
+          <input type="file" id="csv-import-input" accept=".csv" style="display:none;" onchange="handleCsvImport(this)">
+          <input type="file" id="excel-import-input" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelImport(this)">
+          <button class="btn btn-secondary" onclick="exportComptesToCsv()">⬇️ Export CSV</button>
+        </div>
+        <div class="new-btn-group">
+          <button class="btn btn-secondary" onclick="createCompte('client')">+ Client</button>
+          <button class="btn btn-primary" onclick="createCompte('prospect')">+ Prospect</button>
+        </div>
+      </div>
+      <div class="header-row" style="margin-top:10px;">
+        <div class="tabs-bar">
+          <button class="tab-btn active" data-tab="kanban" onclick="switchTab('kanban')">📋 Pipeline</button>
+          <button class="tab-btn" data-tab="table" onclick="switchTab('table')">📊 Liste</button>
+          <button class="tab-btn" data-tab="relances" onclick="switchTab('relances')">📅 À relancer <span class="tab-badge hidden" id="relance-late-badge"></span></button>
+          <button class="tab-btn" data-tab="stats" onclick="switchTab('stats')">📈 Statistiques</button>
+          <button class="tab-btn" data-tab="carte" onclick="switchTab('carte')">🗺️ Carte</button>
+          <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">⚙️ Paramètres</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="relance-banner-container"></div>
+
+    <div class="tab-content active" id="tab-kanban">
+      <div class="kanban-toolbar">
+        <select id="kanban-type-select" onchange="setFilterType(this.value)">
+          <option value="">Tous types</option>
+          <option value="client">Client</option>
+          <option value="prospect">Prospect</option>
+          <option value="ancien">Ancien client</option>
+        </select>
+        <select id="kanban-category-select" onchange="setFilterCategory(this.value)">
+          <option value="">Toutes catégories</option>
+        </select>
+        <input type="search" id="kanban-search-input" placeholder="Rechercher..." oninput="setKanbanSearch(this.value)">
+        <label class="kanban-show-all-toggle"><input type="checkbox" id="kanban-show-all-toggle" onchange="setKanbanShowAll(this.checked)"> Afficher tous les clients</label>
+      </div>
+      <div id="kanban-board"></div>
+    </div>
+
+    <div class="tab-content" id="tab-table">
+      <div class="table-toolbar">
+        <input type="search" id="table-search" placeholder="Rechercher..." oninput="renderTableView()">
+        <select id="table-filter-type" onchange="renderTableView()">
+          <option value="">Tous types</option>
+          <option value="client">Client</option>
+          <option value="prospect">Prospect</option>
+          <option value="ancien">Ancien client</option>
+        </select>
+
+        <select id="table-filter-status" onchange="renderTableView()"><option value="">Tous statuts</option></select>
+        <select id="table-filter-responsible" onchange="renderTableView()"><option value="">Tous responsables</option></select>
+      </div>
+      <div id="table-view"></div>
+    </div>
+
+    <div class="tab-content" id="tab-relances">
+      <div id="relances-view"></div>
+    </div>
+
+    <div class="tab-content" id="tab-stats">
+      <div id="stats-view"></div>
+    </div>
+
+    <div class="tab-content" id="tab-carte">
+      <div class="carte-toolbar">
+        <select id="carte-mode-select" onchange="setCarteMode(this.value)">
+          <option value="pins">📍 Comptes individuels</option>
+          <option value="region">🗺️ Par région</option>
+        </select>
+        <select id="carte-type-select" onchange="setCarteFilterType(this.value)">
+          <option value="">Tous types</option>
+          <option value="prospect">Prospects</option>
+          <option value="client">Clients</option>
+        </select>
+        <select id="carte-departement-select" onchange="setCarteFilterDepartement(this.value)">
+          <option value="">Tous départements</option>
+        </select>
+        <select id="carte-metric-select" class="hidden" onchange="setCarteMetric(this.value)">
+          <option value="count">Nombre de comptes</option>
+          <option value="ca">CA total (€)</option>
+        </select>
+        <span id="carte-count" class="carte-count"></span>
+      </div>
+      <div id="carte-board" class="carte-board"></div>
+      <div id="carte-region-wrap" class="carte-board carte-region-wrap hidden">
+        <div id="carte-region-status" class="carte-region-status">Chargement…</div>
+        <svg id="carte-region-svg"></svg>
+        <div id="carte-region-tooltip" class="carte-region-tooltip"></div>
+      </div>
+      <div id="carte-domtom-chips" class="carte-domtom-chips hidden"></div>
+      <div id="carte-legend" class="carte-legend hidden"></div>
+    </div>
+
+    <div class="tab-content" id="tab-settings">
+      <div id="settings-view"></div>
+    </div>
+  </div>
+
+  <div id="modal-container" class="hidden"></div>
+  <div id="toast-container"></div>
+
+  <script src="widget.js?t=20260708e"></script>
+</body>
+</html>

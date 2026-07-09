@@ -1,0 +1,33 @@
+{
+  "name": "@isaytoo/crm-widget",
+  "version": "1.0.0",
+  "description": "Grist CRM Widget - Pipeline prospects/clients, contacts, contrats, relances",
+  "homePage": "https://github.com/isaytoo/grist-crm-widget",
+  "scripts": {
+    "dev": "python3 -m http.server 8092",
+    "build": "esbuild src/app.js --bundle --format=iife --outfile=widget.js",
+    "build:watch": "esbuild src/app.js --bundle --format=iife --outfile=widget.js --watch",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "jsdom": "^29.1.1",
+    "vitest": "^2.1.0"
+  },
+  "grist": {
+    "name": "CRM",
+    "url": "https://gristlabs.github.io/grist-widget/crm/",
+    "widgetId": "@isaytoo/widget-crm",
+    "published": true,
+    "accessLevel": "full",
+    "renderAfterReady": true,
+    "description": "CRM widget with Kanban pipeline, contacts, contracts, comments and reminders.",
+    "isGristLabsMaintained": false,
+    "authors": [
+      {
+        "name": "Said Hamadou",
+        "url": "https://github.com/isaytoo"
+      }
+    ]
+  }
+}
